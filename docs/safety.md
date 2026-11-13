@@ -1,87 +1,58 @@
-# Safety Guide
+# 安全说明
 
-CoyoteCoder defaults to dry-run mode. Keep dry-run enabled until the proxy, DG-LAB pairing, and event flow have all been verified.
+默认是空转（dry-run）。在链路、配对、事件流都确认过之前，请一直开着空转。
 
-## Default Safe State
+## 默认状态
 
-- `safety.dry_run: true` means shock plans are produced and recorded, but real DG-LAB output is not sent.
-- `safety.armed: false` means real output is blocked even if dry-run is disabled.
-- `POST /control/panic` disarms the system, recalls any queued pulse forwards, and commands both channels to zero directly — it does not depend on the event pipeline being healthy.
-- `panic_zero_on_exit: true` makes shutdown drain queued sends, zero both channels, wait for the frames to actually leave the socket, and only then drop the transports. `SIGINT`, `SIGTERM`, `SIGBREAK`, and an uncaught exception all take this path.
-- Custom waveforms and continuous streaming plans still pass through `SafetyGate` before any real output is sent.
+- \`safety.dry_run: true\`：计划照算、日志照写、面板照显示，但**不会**下发到设备。
+- \`safety.armed: false\`：即使关了空转，没上膛也不会真的输出。而且 \`armed\` 从不写盘 —— 重启后一定是未上膛。
+- **急停**（面板红色按钮 / \`POST /api/panic\`）：锁死急停闩、下膛、撤回排队中的脉冲转发、并且**直接**给两个通道归零；它不依赖事件链路是否健康。
+- \`panic_zero_on_exit: true\`：退出时排空队列 → 撤回转发 → 归零 → 等帧真的离开 socket → 才关传输层。
+- 断线即失效：\`dglab.disconnected\` 会让 armed 会话立即作废并归零，因为链路没了，输出也不该再挂在那儿。
+- 自定义波形、持续计划一样要过安全闸。
 
-## Layered Limits
+## 分层限制
 
-`SafetyGate` applies these in order. Everything except the zero/clear path is subject to all of them:
+\`SafetyGate\` 按顺序叠加，除归零/清除路径外全部适用：
 
-| Layer | Setting | Behaviour |
+| 层 | 设置 | 行为 |
 | --- | --- | --- |
-| Panic latch | — | Blocks everything until `POST /control/arm` |
-| Arm state | `safety.armed` | Real output requires an explicit arm |
-| Session ceiling | `safety.max_session_ms` | Auto-disarms after this long armed; `0` disables |
-| Idle ceiling | `safety.idle_disarm_ms` | Auto-disarms after this long without events; `0` disables |
-| Spacing | `safety.min_interval_ms` | Minimum gap between discrete plans per channel; continuous stream refreshes are exempt |
-| Rate limit | `safety.max_events_per_minute` | Sliding 60s window |
-| Intensity ceiling | `safety.channel_limits` ∩ device soft limit | The stricter of the two wins when `respect_device_soft_limit` is on |
-| Ramp | `safety.max_intensity_step` | Largest increase a single plan may apply per channel |
-| Duration | `safety.max_continuous_output_ms` | Caps plan duration |
+| 急停闩 | — | 一切挡下，直到重新上膛 |
+| 上膛状态 | \`safety.armed\` | 真实输出必须先显式上膛 |
+| 会话上限 | \`safety.max_session_ms\` | 上膛这么久后自动下膛；\`0\` 关闭 |
+| 空闲上限 | \`safety.idle_disarm_ms\` | 这么久没有事件后自动下膛；\`0\` 关闭 |
+| 间隔 | \`safety.min_interval_ms\` | 同一通道两个离散计划之间的最小间隔；持续输出刷新不受此限 |
+| 速率 | \`safety.max_events_per_minute\` | 滑动 60 秒窗口 |
+| 强度上限 | \`safety.channel_limits\` ∩ 设备软限 | 开了 \`respect_device_soft_limit\` 时取更严的一边 |
+| 爬升 | \`safety.max_intensity_step\` | 单个计划对同一通道的最大增幅 |
+| 时长 | \`safety.max_continuous_output_ms\` | 单个计划的时长上限 |
 
-An auto-disarm (session expiry, idle timeout, or the DG-LAB link dropping) also zeroes the device rather than only flipping a flag. Losing the WebSocket link disarms the session: an armed state must not outlive the path that carries its output.
+## 降级路径是例外，且必须保持是例外
 
-## Preflight Checklist
+- \`shock.zero\` / \`shock.clear\` **绕过** SafetyGate，\`DglabSink\` 在下膛时也照发。因为“下膛”并不会自动解除设备已经锁存的强度。
+- 空转是另一回事：什么都没发出去，也就没有东西要撤回。
+- 任何让输出停下来的东西（急停、退出、断线、自动下膛）都必须真的到达硬件，而不是只改一个标志位。归零之后要 \`controller.flush()\`，因为 \`ws.send()\` 只是入队。
 
-1. Start CoyoteCoder with `safety.dry_run: true`.
-2. Open `http://127.0.0.1:8787/ui`.
-3. Confirm the header shows `Dry-run 开启` and `反馈已停止`.
-4. Run a dry request through `http://127.0.0.1:8787/v1`.
-5. Check `GET /events/recent` for lifecycle events.
-6. Check `GET /shock/recent` for generated plans and Safety outcomes.
-7. Pair DG-LAB only after the dry-run path is visible and stable.
+改这块代码时请让这几组测试继续通过：
 
-## Pairing Flow
+\`\`\`bash
+npx vitest run src/host/runtime.test.ts src/dglab/sink.test.ts src/shock/safety.test.ts
+\`\`\`
 
-1. Start the official DG-LAB Socket V2 backend.
-2. Keep `dglab.enabled: true`, which is the default.
-3. Keep `dglab.qr_host: auto` unless you need to force a specific LAN address.
-4. Keep `safety.dry_run: true`.
-5. Request `GET /dglab/qr` or click `生成配对码` in the UI.
-6. Scan the QR code with the APP.
-7. Confirm `GET /dglab/status` reports `bound: true`.
-8. Send one more dry-run request and confirm no real output is sent.
+它们是本文承诺的回归测试。
 
-## Real Output Gate
+## 上手检查
 
-Only test real output after the dry-run and pairing checks pass.
+1. 空转开着，打开控制面板（侧栏「郊狼反馈」）。
+2. 确认顶部是「空转（不下发）」+「未上膛」。
+3. 跑一个真实的 agent 请求，看「最近事件」有请求开始 / 生成中 / 完成。
+4. 看「安全边界」里的“实发上限”“一分钟内事件数”“空闲下膛倒计时”是不是在动。
+5. 用「试一下」发一个脉冲 —— 空转开着时它只会出现在事件流里。
+6. 这一切都稳定之后，再清空转、上膛、配对设备。
 
-1. Set conservative channel limits in the UI.
-2. Click `启动反馈` or call `POST /control/arm`.
-3. Disable Dry-run only for the active test window.
-4. Keep the UI open with the `紧急停止` button visible.
-5. Re-enable Dry-run or click `停止反馈` immediately after the test.
+## 配对
 
-流式输出会合并高频 chunk，减少连续输出过密触发限流的概率；这只是体验优化，不替代 Safety 上限。
-
-## Emergency Stop
-
-Use any available panic path:
-
-```powershell
-Invoke-RestMethod -Method Post http://127.0.0.1:8787/control/panic
-```
-
-Panic sets `armed` to false, enters panic state, cancels queued pulse forwards, and commands both channels to zero. After panic, call `POST /control/arm` only when you intentionally want to resume testing.
-
-`POST /ui/stop` (and the tray's 暂停反馈) disarms and zeroes but keeps the DG-LAB pairing, so resuming does not require re-scanning the QR code. Use `POST /ui/disconnect` when you want to drop the pairing as well.
-
-## Observability
-
-Use these endpoints while tuning:
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8787/status
-Invoke-RestMethod http://127.0.0.1:8787/events/recent
-Invoke-RestMethod http://127.0.0.1:8787/shock/recent
-Invoke-RestMethod http://127.0.0.1:8787/dglab/status
-```
-
-`/shock/recent` reports the raw plan from policy, the Safety-adjusted output when allowed, and whether the plan was sent, blocked, or errored.
+1. 保持 \`dglab.enabled: true\`（默认）。
+2. \`dglab.qr_host: auto\` 一般够用；扫不出来就填具体网卡地址。
+3. 面板「设备」一栏出现二维码后，用官方 App 扫。
+4. App 显示已连接、面板显示「已绑定」，才算通。

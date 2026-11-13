@@ -1,0 +1,77 @@
+{
+  "name": "magpie-coyotecoder",
+  "version": "0.2.0",
+  "description": "把 agent 的每一次请求变成 DG-LAB 郊狼反馈：magpie 网关钩子 + 控制面板。Turns what agents do in magpie into DG-LAB feedback.",
+  "type": "module",
+  "main": "./index.ts",
+  "keywords": [
+    "magpie",
+    "magpie-plugin",
+    "magpie-page",
+    "magpie-hooks",
+    "dglab",
+    "coyote",
+    "coyotecoder"
+  ],
+  "engines": {
+    "magpie": ">=0.1.1340"
+  },
+  "magpie": {
+    "name": "CoyoteCoder",
+    "summary": {
+      "en": "Turns what your agents do through magpie into DG-LAB (郊狼) output: request start, streaming, tool calls, errors and completion each map to a channel plan, gated by hard limits, with a control panel for pairing, arming and the emergency stop.",
+      "zh": "把 agent 经过 magpie 的每一次请求变成 DG-LAB（郊狼）的反馈：请求开始、生成中、工具调用、出错、完成各对应一套通道计划，全部过安全门；面板里配对、上膛、急停。"
+    },
+    "permissions": [],
+    "icon": "page/icon.svg",
+    "hooks": "./hooks.ts",
+    "page": {
+      "title": "CoyoteCoder",
+      "titles": {
+        "zh": "郊狼反馈",
+        "zh-TW": "郊狼回饋",
+        "ja": "コヨーテ反応"
+      },
+      "file": "page/index.html",
+      "icon": "page/icon.svg",
+      "service": {
+        "port": 8787,
+        "option": "port"
+      },
+      "keepAlive": true
+    },
+    "options": {
+      "port": 8787,
+      "socketUrl": "ws://127.0.0.1:9999",
+      "relayBindHost": "0.0.0.0",
+      "gatewayTimeoutMs": 2000
+    }
+  },
+  "files": [
+    "index.ts",
+    "hooks.ts",
+    "page",
+    "console",
+    "src",
+    "waveforms",
+    "docs",
+    "README.md",
+    "CoyoteCoder.png"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "ws": "^8.21.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "@types/qrcode": "^1.5.6",
+    "@types/ws": "^8.18.1",
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.0"
+  }
+}

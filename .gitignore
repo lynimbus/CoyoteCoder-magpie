@@ -1,14 +1,13 @@
+# DG-LAB protocol reference, kept locally only
 /DG-LAB-OPENSOURCE/
 
 # Node / TypeScript
 node_modules/
-dist/
-src-ui/dist/
-**/src-tauri/target/
 coverage/
 *.tsbuildinfo
 
-# Portable build artifacts live under root dist/
+# The plugin's own state (settings.json), written beside magpie's config
+plugin-work/
 
 # User-imported DG-LAB waveforms
 /waveforms/*
@@ -17,7 +16,6 @@ coverage/
 
 # Local config and logs
 .env
-/app/config.yaml
 *.local.yaml
 *.local.yml
 *.log

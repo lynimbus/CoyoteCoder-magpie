@@ -1,7 +1,7 @@
 name: verify
 
-# The release workflow only runs on tags, so ordinary commits previously had no
-# checks at all. This runs the same typecheck and tests on every push and PR.
+# Typecheck and unit tests. The device-facing logic (safety gate, engine,
+# adapters) is what these guard; the gateway wiring needs a running magpie.
 on:
   push:
     branches:
@@ -25,30 +25,22 @@ concurrency:
 jobs:
   verify:
     name: typecheck and test
-    runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: app
-
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: "22"
           cache: npm
-          cache-dependency-path: app/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Typecheck
         run: npm run typecheck
 
       - name: Test
         run: npm test
-
-      - name: Build API and UI
-        run: npm run build

@@ -1,0 +1,15 @@
+import type { Channel } from "../config/schema.ts";
+
+export interface ShockPlan {
+  kind: "shock.plan" | "shock.zero" | "shock.clear";
+  channel?: Channel;
+  intensity: number;
+  durationMs: number;
+  reason: string;
+  waveId?: string;
+  continuous?: boolean;
+}
+
+export interface ShockSink {
+  send(plan: ShockPlan, meta: { dryRun: boolean; armed: boolean }): void | Promise<void>;
+}

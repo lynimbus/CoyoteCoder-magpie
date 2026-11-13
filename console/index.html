@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 每次启动重新生成的页面口令，服务端会把它填进下面那个 meta 的 content。
+     magpie 的页面在 sandbox="allow-scripts" 的框架里，是 opaque origin，
+     /api 一律要这个口令，别的页面拿不到。 -->
+<meta name="coyotecoder-key" content="@@COYOTECODER_KEY@@">
+<title>CoyoteCoder 控制面板</title>
+<link rel="stylesheet" href="style.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<!-- magpie 的 .top：46px 的头，品牌在左、状态点在中、动作在右。
+     页面自己的配色和字号都跟着 style.css 顶上那套 magpie 设计变量走。 -->
+<header class="top">
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.3 1 3 9.4h3.6L6.7 15 13 6.6H9.4L9.3 1Z"/></svg>
+    <span class="name">CoyoteCoder</span>
+    <span class="sub" id="address">—</span>
+  </div>
+  <div class="states" id="states">
+    <span class="state" id="st-link"><i class="dot"></i><b id="st-link-t">设备 未连接</b></span>
+    <span class="state" id="st-armed"><i class="dot"></i><b id="st-armed-t">未上膛</b></span>
+    <span class="state" id="st-dry"><i class="dot"></i><b id="st-dry-t">空转</b></span>
+  </div>
+  <div class="actions">
+    <button class="text primary" id="arm">上膛</button>
+    <button class="text" id="disarm">下膛</button>
+    <button class="text danger" id="panic">急停</button>
+  </div>
+</header>
+
+<main class="view">
+  <p class="banner" id="banner" hidden></p>
+
+  <section class="set-page">
+    <div class="row-head"><span class="label">设备</span></div>
+    <div class="list">
+      <div class="row pair">
+        <div class="qr-side">
+          <div class="qr">
+            <img id="qr" alt="配对二维码" src="" hidden>
+            <div class="qr-empty" id="qr-empty">连接中…</div>
+          </div>
+        </div>
+        <div class="pair-facts">
+          <dl class="facts">
+            <div class="fact"><dt>连接</dt><dd id="f-connected">—</dd></div>
+            <div class="fact"><dt>绑定</dt><dd id="f-bound">—</dd></div>
+            <div class="fact"><dt>手机地址</dt><dd id="f-socket">—</dd></div>
+            <div class="fact"><dt>强度</dt><dd id="f-strength">—</dd></div>
+          </dl>
+          <p class="hint">用手机上的 DG-LAB App 扫这个码配对。手机要和这台电脑在同一网络。</p>
+        </div>
+      </div>
+      <p class="hint warn" id="qr-hint" hidden></p>
+    </div>
+  </section>
+
+  <section class="set-page">
+    <div class="row-head"><span class="label">安全边界</span></div>
+    <div class="list">
+      <div class="row">
+        <span class="name">A 通道上限</span>
+        <span class="in"><input type="number" id="s-limit-a" min="0" max="100" step="1"><span class="unit">%</span></span>
+      </div>
+      <div class="row">
+        <span class="name">B 通道上限</span>
+        <span class="in"><input type="number" id="s-limit-b" min="0" max="100" step="1"><span class="unit">%</span></span>
+      </div>
+      <div class="row">
+        <span class="name">单次最长输出</span>
+        <span class="in"><input type="number" id="s-continuous" min="1" max="30000" step="100"><span class="unit">ms</span></span>
+      </div>
+      <div class="row">
+        <span class="name">每分钟事件上限</span>
+        <span class="in"><input type="number" id="s-rate" min="1" max="600" step="1"><span class="unit">次/分</span></span>
+      </div>
+      <div class="row">
+        <span class="name">强度步进上限</span>
+        <span class="in"><input type="number" id="s-step" min="0.01" max="1" step="0.01"><span class="unit">强度</span></span>
+      </div>
+      <div class="row">
+        <span class="name">同通道最小间隔</span>
+        <span class="in"><input type="number" id="s-interval" min="0" max="10000" step="10"><span class="unit">ms</span></span>
+      </div>
+      <div class="row">
+        <span class="name">单次会话上限</span>
+        <span class="in"><input type="number" id="s-session" min="0" max="21600000" step="60000"><span class="unit">ms</span></span>
+      </div>
+      <div class="row">
+        <span class="name">空闲自动下膛</span>
+        <span class="in"><input type="number" id="s-idle" min="0" max="3600000" step="10000"><span class="unit">ms</span></span>
+      </div>
+      <div class="row check">
+        <label class="who" for="s-soft"><span class="name">服从设备自己报告的强度上限</span></label>
+        <input type="checkbox" id="s-soft">
+      </div>
+      <div class="row check">
+        <label class="who" for="s-dry"><span class="name">空转（dry run）</span><span class="sub">开着时不会把电流下发到设备</span></label>
+        <input type="checkbox" id="s-dry">
+      </div>
+      <div class="row note-row">
+        <span class="sub" id="edge">—</span>
+      </div>
+      <div class="row foot">
+        <span class="grow"></span>
+        <button class="text action" id="save-safety">保存安全边界</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="set-page">
+    <div class="row-head"><span class="label">反馈映射</span></div>
+    <div class="list">
+      <div class="table-wrap">
+        <table id="policy">
+          <thead>
+            <tr><th>时机</th><th>通道</th><th>时长 (ms)</th><th>系数</th><th>基础强度</th><th>波形</th></tr>
+          </thead>
+          <tbody>
+            <tr data-key="request_started"><th>A · 请求开始</th><td class="ch"></td><td><input type="number" data-f="duration_ms" min="1" step="10"></td><td><input type="number" data-f="coefficient" min="0" max="2" step="0.05"></td><td class="muted">固定</td><td class="wave"></td></tr>
+            <tr data-key="response_started"><th>B · 开始输出</th><td class="ch"></td><td><input type="number" data-f="duration_ms" min="1" step="10"></td><td><input type="number" data-f="coefficient" min="0" max="2" step="0.05"></td><td class="muted">固定</td><td class="wave"></td></tr>
+            <tr data-key="response_chunk"><th>B · 生成中</th><td class="ch"></td><td><input type="number" data-f="duration_ms" min="1" step="10"></td><td><input type="number" data-f="coefficient" min="0" max="2" step="0.05"></td><td class="muted">脉冲</td><td class="wave"></td></tr>
+            <tr data-key="response_tool_call"><th>A · 工具调用</th><td class="ch"></td><td><input type="number" data-f="duration_ms" min="1" step="10"></td><td><input type="number" data-f="coefficient" min="0" max="2" step="0.05"></td><td class="muted">固定</td><td class="wave"></td></tr>
+            <tr data-key="response_error_status"><th>B · 报错</th><td class="ch"></td><td><input type="number" data-f="duration_ms" min="1" step="10"></td><td><input type="number" data-f="coefficient" min="0" max="2" step="0.05"></td><td class="muted">固定</td><td class="wave"></td></tr>
+            <tr data-key="response_done"><th>A · 完成</th><td class="ch"></td><td><input type="number" data-f="duration_ms" min="1" step="10"></td><td><input type="number" data-f="coefficient" min="0" max="2" step="0.05"></td><td class="muted">固定</td><td class="wave"></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="row">
+        <span class="name">完成强度对应的输出 token</span>
+        <span class="in"><input type="number" id="p-tokens" min="1" step="50"><span class="unit">tok</span></span>
+      </div>
+      <div class="row">
+        <span class="name">生成中脉冲间隔</span>
+        <span class="in"><input type="number" id="p-tick" min="100" max="10000" step="50"><span class="unit">ms</span></span>
+      </div>
+      <div class="row foot">
+        <span class="grow"></span>
+        <button class="text action" id="save-policy">保存映射</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="set-page">
+    <div class="row-head"><span class="label">试一下</span></div>
+    <div class="list">
+      <div class="row">
+        <span class="name">通道</span>
+        <span class="in"><select id="t-channel"><option value="A">A</option><option value="B">B</option></select></span>
+      </div>
+      <div class="row">
+        <span class="name">强度</span>
+        <span class="in"><input type="number" id="t-intensity" min="0" max="1" step="0.01" value="0.1"><span class="unit">0–1</span></span>
+      </div>
+      <div class="row">
+        <span class="name">时长</span>
+        <span class="in"><input type="number" id="t-duration" min="50" max="10000" step="50" value="400"><span class="unit">ms</span></span>
+      </div>
+      <div class="row">
+        <span class="name">波形</span>
+        <span class="in"><select id="t-wave"></select></span>
+      </div>
+      <div class="row foot">
+        <span class="sub">这一下照样过安全闸：没有上膛、或者空转开着，都不会真的下发。</span>
+        <span class="grow"></span>
+        <button class="text action" id="test">发出一个脉冲</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="set-page">
+    <div class="row-head"><span class="label">最近事件</span></div>
+    <div class="list">
+      <ul class="log" id="log"></ul>
+    </div>
+  </section>
+</main>
+</body>
+</html>

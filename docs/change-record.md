@@ -1,5 +1,36 @@
 # Change Record
 
+## 2026-11-13
+
+把这套东西从「自带代理 + 桌面程序」改造成 magpie 插件。用户的选择：网关钩子 + 控制页面；就地改造、删掉 Tauri；自带 Socket V2 中继。
+
+### 结构
+
+- 删除 `app/`（Fastify 代理层 `src/proxy/`、`src/api/`、React 控制台 `src-ui/`、Tauri 外壳 `src-tauri/`）、`scripts/`、Windows 打包脚本与 `windows.yml`。
+- `src/{shock,dglab,events,util}` 上移到仓库根 `src/`，导入后缀统一成 `.ts`（Bun 直接跑，无构建）。
+- 新增 `index.ts`（`main`，宿主入口）、`hooks.ts`（`magpie.hooks`）、`page/`（带路页）、`console/`（控制面板本体）。
+- 新增 `src/host/runtime.ts`（组装根，取代 `src/app/runtime.ts`）与 `src/host/console.ts`（面板 HTTP API + SSE）。
+- `src/config/schema.ts` 去掉 `server` / `upstream` 两块：magpie 就是网关，插件不再转发任何请求。新增 `console`、`dglab` 保持原样。
+
+### 事件来源换了
+
+旧版靠自己解析 SSE 才知道“流式输出第几块”。magpie 的网关钩子只在**请求开始**和**输出结束**各触发一次，没有 chunk。
+
+- `response.chunk` 改成插件自己的节拍器按时间爬升模拟（默认 900ms 一拍，最多 20 拍）；
+- `response.done` 的强度仍按 `usage` 里的输出 token 算，读不到就退回固定值；
+- 工具调用与报错从回复体里认（Chat Completions / Anthropic Messages / Open Responses 三种形状）。
+
+### 安全
+
+- `armed` 现在**从不写盘**：`saveSettings()` 里显式抹掉，重启后一定是未上膛。
+- 急停、下膛、退出、断线、自动下膛仍然真的归零并撤回排队脉冲。
+- 面板服务的「试一下」也走 `engine.sendGatedPlan()`，不许绕过安全闸与串行链。
+
+### 新增回归测试
+
+- `src/host/runtime.test.ts`：请求生命周期事件、失败上报、急停闩、面板 API、设置落盘时 `armed` 被抹掉。
+- `src/host/hooks.test.ts`：三种协议的回复解析，以及流式回复（`null`）的情形。
+
 ## 2026-07-26
 
 一轮以安全边界和感知完整性为主的修复，起因是发现文档承诺的若干安全行为并未真正实现。
